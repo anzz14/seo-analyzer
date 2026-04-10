@@ -76,3 +76,9 @@ async def auth_headers(client: AsyncClient) -> dict[str, str]:
 	)
 	token = login_res.json()["access_token"]
 	return {"Authorization": f"Bearer {token}"}
+
+
+@pytest_asyncio.fixture
+async def sample_txt_file() -> tuple[str, tuple[str, bytes, str]]:
+	content = ("Hello world. " * 50).encode("utf-8")
+	return ("files", ("test.txt", content, "text/plain"))

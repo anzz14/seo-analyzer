@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, func, text
+from sqlalchemy import BigInteger, DateTime, ForeignKey, String, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -25,7 +25,20 @@ class Document(Base):
         nullable=False,
         index=True,
     )
-    file_path: Mapped[str] = mapped_column(String(255), nullable=False)
+    original_filename: Mapped[str] = mapped_column(String(500), nullable=False)
+    file_path: Mapped[str] = mapped_column(String(1000), nullable=False)
+    file_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    upload_timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     user: Mapped["User"] = relationship("User", back_populates="documents")
+    processing_jobs: Mapped[list["ProcessingJob"]] = relationship(
+        "ProcessingJob",
+        back_populates="document",
+    )
+    extracted_result: Mapped["ExtractedResult | None"] = relationship(
+        "ExtractedResult",
+        back_populates="document",
+        uselist=False,
+    )
