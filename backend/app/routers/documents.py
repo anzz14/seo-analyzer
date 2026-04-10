@@ -35,6 +35,7 @@ async def upload_documents(
     upload_dir.mkdir(parents=True, exist_ok=True)
 
     results: list[UploadResponse] = []
+    dispatch_payloads: list[tuple[str, str, str]] = []
 
     for file in files:
         if file.content_type != "text/plain":
@@ -67,11 +68,7 @@ async def upload_documents(
             mime_type=file.content_type,
         )
         job = await document_service.create_job_for_document(db=db, document_id=document.id)
-
-        # Lazy import avoids circular imports between routers/services and worker tasks.
-        from app.workers.tasks import analyze_document
-
-        analyze_document.delay(str(job.id), str(document.id), str(stored_path))
+        dispatch_payloads.append((str(job.id), str(document.id), str(stored_path)))
 
         results.append(
             UploadResponse(
@@ -81,6 +78,15 @@ async def upload_documents(
                 file_size=file_size,
             )
         )
+
+    # Single commit for bulk upload keeps request latency lower than committing each file.
+    await db.commit()
+
+    # Lazy import avoids circular imports between routers/services and worker tasks.
+    from app.workers.tasks import analyze_document
+
+    for job_id, document_id, file_path in dispatch_payloads:
+        analyze_document.delay(job_id, document_id, file_path)
 
     return results
 

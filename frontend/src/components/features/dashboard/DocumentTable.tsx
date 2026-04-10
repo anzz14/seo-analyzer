@@ -22,6 +22,7 @@ import {
 } from "@mui/material";
 
 import { useDocumentStore } from "@/store/documentStore";
+import { useProgressStore } from "@/store/progressStore";
 import type { DocumentResponse } from "@/types/document";
 import { useSSE } from "@/hooks/useSSE";
 import { downloadDocumentExport } from "@/components/features/export/ExportButtons";
@@ -44,9 +45,21 @@ interface ProcessingProgressCellProps {
 }
 
 function ProcessingProgressCell({ jobId, status }: ProcessingProgressCellProps) {
-  useSSE(status === "processing" ? jobId : null);
+  useSSE(status === "processing" || status === "queued" ? jobId : null);
 
-  if (status !== "processing" || !jobId) {
+  if (!jobId) {
+    return null;
+  }
+
+  if (status === "queued") {
+    return (
+      <Typography variant="caption" color="text.secondary">
+        Queued...
+      </Typography>
+    );
+  }
+
+  if (status !== "processing") {
     return null;
   }
 
@@ -94,6 +107,7 @@ export default function DocumentTable({ documents, isLoading, onRetrySuccess }: 
   const total = useDocumentStore((state) => state.total);
   const pageSize = useDocumentStore((state) => state.pageSize);
   const setPage = useDocumentStore((state) => state.setPage);
+  const progressByJob = useProgressStore((state) => state.progress);
   const [retryingJobId, setRetryingJobId] = useState<string | null>(null);
 
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
@@ -152,6 +166,9 @@ export default function DocumentTable({ documents, isLoading, onRetrySuccess }: 
               : documents.map((document) => {
                   const status = normalizeStatus(document.latest_job?.status ?? "queued");
                   const jobId = document.latest_job?.id ?? null;
+                  const liveStage = jobId ? progressByJob[jobId]?.stage : undefined;
+                  const effectiveStatus: Status =
+                    status === "queued" && liveStage === "processing" ? "processing" : status;
 
                   return (
                   <TableRow key={document.id} hover>
@@ -159,11 +176,11 @@ export default function DocumentTable({ documents, isLoading, onRetrySuccess }: 
                     <TableCell>{formatTimestamp(document.upload_timestamp)}</TableCell>
                     <TableCell>{formatFileSize(document.file_size)}</TableCell>
                     <TableCell>
-                      <StatusBadge status={status} />
+                      <StatusBadge status={effectiveStatus} />
                     </TableCell>
                     <TableCell>
-                      {status === "processing" ? (
-                        <ProcessingProgressCell jobId={jobId} status={status} />
+                      {effectiveStatus === "processing" || status === "queued" ? (
+                        <ProcessingProgressCell jobId={jobId} status={effectiveStatus} />
                       ) : (
                         <Typography variant="caption" color="text.secondary">
                           -
