@@ -24,29 +24,146 @@ Full-stack SEO content analyzer with async processing, live progress streaming, 
 
 ```text
 seo-analyzer/
-	backend/
-		app/
-			dependencies/
-			models/
-			routers/
-			schemas/
-			scripts/
-			services/
-			workers/
-			main.py
-		alembic/
-		tests/
-	frontend/
-		src/
-			app/
-			components/
-			context/
-			hooks/
-			lib/
-			store/
-			types/
-	storage/uploads/
-	docker-compose.yml
+├── README.md
+├── docker-compose.yml
+├── sample.txt
+├── .env.example
+├── backend/
+│   ├── alembic.ini
+│   ├── Dockerfile
+│   ├── entrypoint.sh
+│   ├── requirements.txt
+│   ├── .env.example
+│   ├── alembic/
+│   │   ├── env.py
+│   │   └── versions/
+│   │       ├── 0001_initial_schema.py
+│   │       ├── 0002_add_documents_and_jobs.py
+│   │       └── 0003_add_extracted_results.py
+│   ├── app/
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── database.py
+│   │   ├── main.py
+│   │   ├── dependencies/
+│   │   │   ├── __init__.py
+│   │   │   └── auth.py
+│   │   ├── models/
+│   │   │   ├── __init__.py
+│   │   │   ├── document.py
+│   │   │   ├── extracted_result.py
+│   │   │   ├── processing_job.py
+│   │   │   └── user.py
+│   │   ├── routers/
+│   │   │   ├── __init__.py
+│   │   │   ├── auth.py
+│   │   │   ├── documents.py
+│   │   │   ├── export.py
+│   │   │   ├── jobs.py
+│   │   │   └── results.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   ├── auth.py
+│   │   │   ├── document.py
+│   │   │   ├── export.py
+│   │   │   ├── job.py
+│   │   │   └── result.py
+│   │   ├── scripts/
+│   │   │   ├── __init__.py
+│   │   │   └── seed.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── auth_service.py
+│   │   │   ├── document_service.py
+│   │   │   ├── event_publisher.py
+│   │   │   ├── export_service.py
+│   │   │   ├── job_service.py
+│   │   │   └── result_service.py
+│   │   └── workers/
+│   │       ├── __init__.py
+│   │       ├── celery_app.py
+│   │       └── tasks.py
+│   ├── services/
+│   │   └── analysis_engine.py
+│   └── tests/
+│       ├── conftest.py
+│       ├── api/
+│       │   ├── __init__.py
+│       │   ├── test_auth.py
+│       │   ├── test_documents.py
+│       │   ├── test_export.py
+│       │   ├── test_finalize.py
+│       │   ├── test_result.py
+│       │   ├── test_retry.py
+│       │   └── test_upload.py
+│       ├── integration/
+│       │   ├── __init__.py
+│       │   ├── test_retry_idempotency.py
+│       │   └── test_worker_pipeline.py
+│       └── unit/
+│           ├── __init__.py
+│           └── test_analysis_engine.py
+├── frontend/
+│   ├── README.md
+│   ├── next.config.mjs
+│   ├── package.json
+│   ├── postcss.config.mjs
+│   ├── tailwind.config.ts
+│   ├── tsconfig.json
+│   ├── .eslintrc.json
+│   └── src/
+│       ├── app/
+│       │   ├── globals.css
+│       │   ├── layout.tsx
+│       │   ├── page.tsx
+│       │   ├── (auth)/
+│       │   │   ├── login/
+│       │   │   │   └── page.tsx
+│       │   │   └── register/
+│       │   │       └── page.tsx
+│       │   ├── dashboard/
+│       │   │   └── page.tsx
+│       │   ├── documents/
+│       │   │   └── [id]/
+│       │   │       └── page.tsx
+│       │   └── fonts/
+│       │       ├── GeistMonoVF.woff
+│       │       └── GeistVF.woff
+│       ├── components/
+│       │   ├── features/
+│       │   │   ├── dashboard/
+│       │   │   │   ├── DocumentTable.tsx
+│       │   │   │   ├── FilterBar.tsx
+│       │   │   │   ├── JobProgressBar.tsx
+│       │   │   │   └── StatusBadge.tsx
+│       │   │   ├── detail/
+│       │   │   │   ├── FinalizeButton.tsx
+│       │   │   │   ├── KeywordsTable.tsx
+│       │   │   │   ├── MetricsPanel.tsx
+│       │   │   │   └── SummaryEditor.tsx
+│       │   │   ├── export/
+│       │   │   │   └── ExportButtons.tsx
+│       │   │   └── upload/
+│       │   │       └── UploadZone.tsx
+│       │   └── providers/
+│       │       └── AppProviders.tsx
+│       ├── context/
+│       │   └── AuthContext.tsx
+│       ├── hooks/
+│       │   ├── useDocumentDetail.ts
+│       │   ├── useDocuments.ts
+│       │   └── useSSE.ts
+│       ├── lib/
+│       │   └── api.ts
+│       ├── store/
+│       │   ├── documentStore.ts
+│       │   └── progressStore.ts
+│       └── types/
+│           ├── auth.ts
+│           └── document.ts
+└── storage/
+    └── uploads/
+        └── .gitkeep
 ```
 
 ## Prerequisites
