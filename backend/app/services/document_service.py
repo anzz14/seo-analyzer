@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, asc, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from app.models.document import Document
 from app.models.processing_job import ProcessingJob
@@ -44,6 +45,7 @@ async def create_job_for_document(db: AsyncSession, document_id: str | UUID) -> 
 def _latest_job_subquery():
     return (
         select(
+            ProcessingJob.id.label("job_id"),
             ProcessingJob.document_id.label("document_id"),
             ProcessingJob.status.label("status"),
             func.row_number()
@@ -55,6 +57,19 @@ def _latest_job_subquery():
         )
         .subquery("latest_job")
     )
+
+
+def _get_sort_column(sort_by: str):
+    if sort_by == "filename":
+        return Document.original_filename
+    return Document.created_at
+
+
+def _get_sort_clause(sort_by: str, sort_order: str):
+    column = _get_sort_column(sort_by)
+    if sort_order.lower() == "asc":
+        return asc(column)
+    return desc(column)
 
 
 def _apply_document_filters(
@@ -85,7 +100,14 @@ async def list_documents(
     page_size: int,
     status_filter: str | None,
     search: str | None,
+    sort_by: str = "created_at",
+    sort_order: str = "desc",
 ) -> tuple[list[Document], int]:
+    page = max(page, 1)
+    page_size = max(page_size, 1)
+
+    latest_job = _latest_job_subquery()
+
     base_docs_query = _apply_document_filters(
         select(Document),
         user_id=user_id,
@@ -102,7 +124,7 @@ async def list_documents(
 
     rows_result = await db.execute(
         base_docs_query
-        .order_by(Document.created_at.desc())
+        .order_by(_get_sort_clause(sort_by, sort_order))
         .offset((page - 1) * page_size)
         .limit(page_size)
     )
@@ -110,6 +132,20 @@ async def list_documents(
 
     total_result = await db.execute(count_query)
     total_count = int(total_result.scalar_one() or 0)
+
+    if not rows:
+        return rows, total_count
+
+    doc_ids = [doc.id for doc in rows]
+    latest_jobs_result = await db.execute(
+        select(ProcessingJob)
+        .join(latest_job, ProcessingJob.id == latest_job.c.job_id)
+        .where(latest_job.c.rn == 1, ProcessingJob.document_id.in_(doc_ids))
+    )
+    latest_jobs_map = {job.document_id: job for job in latest_jobs_result.scalars().all()}
+
+    for doc in rows:
+        setattr(doc, "latest_job", latest_jobs_map.get(doc.id))
 
     return rows, total_count
 
@@ -125,5 +161,36 @@ async def get_document(db: AsyncSession, document_id: str | UUID, user_id: str |
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found",
         )
+
+    return document
+
+
+async def get_document_with_details(
+    db: AsyncSession, doc_id: str | UUID, user_id: str | UUID
+) -> Document:
+    result = await db.execute(
+        select(Document)
+        .options(
+            joinedload(Document.processing_jobs),
+            joinedload(Document.extracted_result),
+        )
+        .where(Document.id == doc_id, Document.user_id == user_id)
+    )
+    document = result.unique().scalar_one_or_none()
+
+    if document is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found",
+        )
+
+    latest_job = None
+    if document.processing_jobs:
+        latest_job = sorted(
+            document.processing_jobs,
+            key=lambda job: (job.created_at or datetime.min.replace(tzinfo=timezone.utc), job.id),
+            reverse=True,
+        )[0]
+    setattr(document, "latest_job", latest_job)
 
     return document

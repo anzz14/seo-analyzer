@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import sys
+from collections.abc import Awaitable, Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -79,6 +80,48 @@ async def auth_headers(client: AsyncClient) -> dict[str, str]:
 
 
 @pytest_asyncio.fixture
+async def second_user_auth_headers(client: AsyncClient) -> dict[str, str]:
+	email = f"second-{uuid.uuid4().hex}@example.com"
+	password = "password123"
+
+	await client.post(
+		"/api/v1/auth/register",
+		json={"email": email, "password": password},
+	)
+	login_res = await client.post(
+		"/api/v1/auth/login",
+		json={"email": email, "password": password},
+	)
+	token = login_res.json()["access_token"]
+	return {"Authorization": f"Bearer {token}"}
+
+
+@pytest_asyncio.fixture
 async def sample_txt_file() -> tuple[str, tuple[str, bytes, str]]:
 	content = ("Hello world. " * 50).encode("utf-8")
 	return ("files", ("test.txt", content, "text/plain"))
+
+
+@pytest_asyncio.fixture
+async def create_document_for_user(
+	client: AsyncClient,
+) -> Callable[[dict[str, str], bytes | None, str | None], Awaitable[dict]]:
+	async def _create(
+		auth_headers: dict[str, str],
+		content: bytes | None = None,
+		filename: str | None = None,
+	) -> dict:
+		file_content = content if content is not None else b"Hello world from helper"
+		file_name = filename or f"doc-{uuid.uuid4().hex}.txt"
+		payload = [("files", (file_name, file_content, "text/plain"))]
+		response = await client.post(
+			"/api/v1/documents/upload",
+			files=payload,
+			headers=auth_headers,
+		)
+		assert response.status_code == 201
+		data = response.json()
+		assert isinstance(data, list) and len(data) == 1
+		return data[0]
+
+	return _create

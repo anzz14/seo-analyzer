@@ -2,6 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
+from app.schemas.job import JobResponse
+
 
 class DocumentResponse(BaseModel):
     id: str
@@ -11,6 +13,7 @@ class DocumentResponse(BaseModel):
     mime_type: str
     upload_timestamp: datetime
     created_at: datetime
+    latest_job: JobResponse | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
