@@ -11,6 +11,22 @@ from services.analysis_engine import compute_all
 
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=60, name="tasks.analyze_document")
 def analyze_document(self, job_id: str, document_id: str, file_path: str):
+    """Analyze document text and store SEO metrics with automatic retry.
+
+    Orchestrates: file read → compute metrics → upsert results → publish progress.
+    Retries up to 3 times on failure with 60s exponential backoff. Handles
+    FileNotFoundError gracefully. Uses ON CONFLICT DO UPDATE to preserve
+    user_edited_summary during retries via COALESCE.
+
+    Args:
+        job_id: UUID of the processing job record to update with progress.
+        document_id: UUID of the document being analyzed.
+        file_path: Absolute file path to read (must exist in shared volume).
+
+    Raises:
+        MaxRetriesExceededError: Caught internally; job marked failed if
+            all retries exhausted.
+    """
     with SyncSession() as db:
         try:
             db.execute(

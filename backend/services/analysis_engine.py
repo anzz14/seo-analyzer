@@ -33,7 +33,17 @@ def _normalize_words(text: str) -> list[str]:
 
 
 def _count_syllables(word: str) -> int:
-    """More accurate syllable counter using vowel-run heuristics."""
+    """Estimate syllable count using vowel-run heuristics.
+
+    Handles silent 'e' endings and syllabic 'le' to avoid over/under-counting.
+    Returns at least 1 syllable per word to prevent readability score inflation.
+
+    Args:
+        word: Any word; punctuation is stripped before processing.
+
+    Returns:
+        Integer ≥ 1 representing estimated syllable count.
+    """
     word = word.lower().rstrip(".,!?;:")
     if not word:
         return 0
@@ -48,7 +58,17 @@ def _count_syllables(word: str) -> int:
 
 
 def compute_readability_score(text: str) -> float:
-    """Flesch Reading Ease score (0–100, higher = easier)."""
+    """Compute Flesch Reading Ease score for text readability.
+
+    Score range 0–100 (0=very difficult, 100=very easy). Falls back to
+    comma/semicolon sentence splitting when minimal punctuation is found.
+
+    Args:
+        text: Raw input text of any length; empty string returns 0.0.
+
+    Returns:
+        Float in [0.0, 100.0], clamped and rounded to 2 decimal places.
+    """
     words = _normalize_words(text)
     if not words:
         return 0.0
@@ -68,10 +88,17 @@ def _extract_ngrams(words: list[str], n: int) -> list[str]:
 
 
 def compute_primary_keywords(text: str, top_n: int = 10) -> list[dict]:
-    """
-    Returns top unigrams + bigrams ranked by frequency.
-    Density is calculated against total non-stopword words for more
-    meaningful SEO percentages.
+    """Extract top keywords (unigrams + bigrams) ranked by frequency.
+
+    Filters stopwords and words ≤2 chars. Bigrams included only if they
+    appear ≥2 times. Density calculated as (count/total_content_words)*100.
+
+    Args:
+        text: Raw input text to analyze.
+        top_n: Maximum keywords to return; defaults to 10.
+
+    Returns:
+        List[dict] with keys: keyword, count, density (percentage).
     """
     if top_n <= 0:
         return []
@@ -112,9 +139,17 @@ def compute_primary_keywords(text: str, top_n: int = 10) -> list[dict]:
 
 
 def compute_summary(text: str, num_sentences: int = 3) -> str:
-    """
-    Extractive summary — picks highest-scoring sentences by keyword weight.
-    Filters out very short sentences (< 5 words) to avoid fragment summaries.
+    """Generate extractive summary by scoring sentences via keyword weight.
+
+    Filters sentences <5 words to avoid fragments. Normalizes scores by
+    sqrt(sentence_length) to prevent longest sentences from dominating.
+
+    Args:
+        text: Raw input text; empty text returns empty string.
+        num_sentences: Target sentence count in output; capped at available.
+
+    Returns:
+        String of selected sentences in original document order.
     """
     if not text.strip() or num_sentences <= 0:
         return ""
@@ -151,7 +186,14 @@ def compute_reading_time(word_count: int, wpm: int = 200) -> int:
 
 
 def compute_sentence_stats(text: str) -> dict:
-    """Avg sentence length and sentence count — useful SEO signals."""
+    """Calculate sentence count and average sentence length.
+
+    Args:
+        text: Raw text split on .!? boundaries.
+
+    Returns:
+        Dict with "sentence_count" (int) and "avg_sentence_length" (float).
+    """
     sentences = [s.strip() for s in re.split(r"[.!?]+", text) if s.strip()]
     if not sentences:
         return {"sentence_count": 0, "avg_sentence_length": 0.0}
@@ -163,6 +205,18 @@ def compute_sentence_stats(text: str) -> dict:
 
 
 def compute_all(text: str) -> dict:
+    """Run all SEO analysis functions and aggregate results.
+
+    Computes word count, readability, keywords, summary, reading time,
+    and sentence statistics in a single orchestrator call.
+
+    Args:
+        text: Raw input text of any length.
+
+    Returns:
+        Dict with 7 keys: word_count, readability_score, primary_keywords,
+        auto_summary, reading_time_seconds, sentence_count, avg_sentence_length.
+    """
     word_count = compute_word_count(text)
     stats = compute_sentence_stats(text)
     return {

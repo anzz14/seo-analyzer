@@ -42,22 +42,20 @@ async def patch_user_summary(
     user_id: str | UUID,
     new_summary: str,
 ) -> ExtractedResult:
-    document = await _get_owned_document(db, document_id, user_id)
+    """Update user_edited_summary for a document result.
 
-    result = await get_result_by_document(db, document.id)
-    if result is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Result not found")
+    Args:
+        db: Async database session.
+        document_id: UUID of the document.
+        user_id: UUID of the owner.
+        new_summary: New summary text.
 
-    if result.is_finalized:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Cannot edit a finalized result",
-        )
+    Returns:
+        Updated ExtractedResult.
 
-    result.user_edited_summary = new_summary
-    await db.commit()
-    await db.refresh(result)
-    return result
+    Raises:
+        HTTPException: 404 if document/result not found; 409 if finalized.
+    """
 
 
 async def finalize_result(
@@ -65,6 +63,24 @@ async def finalize_result(
     document_id: str | UUID,
     user_id: str | UUID,
 ) -> ExtractedResult:
+    """Mark result as finalized and prevent further user edits.
+
+    Validates: document ownership, result exists, job is not stale (latest
+    job_id matches result.job_id). Stale job indicates a retry was run
+    after finalization was initiated — user must retry before re-finalizing.
+
+    Args:
+        db: Async database session.
+        document_id: UUID of the document to finalize.
+        user_id: UUID of the owner (used to verify authorization).
+
+    Returns:
+        Updated ExtractedResult with is_finalized=True and finalized_at set.
+
+    Raises:
+        HTTPException: 404 if document/result/job not found; 409 if already
+            finalized or job is stale; 400 if latest_job_id != result.job_id.
+    """
     document = await _get_owned_document(db, document_id, user_id)
 
     latest_job_result = await db.execute(

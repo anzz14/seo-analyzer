@@ -62,7 +62,18 @@ async def stream_csv_rows(
     db: AsyncSession,
     user_id: str | UUID,
 ) -> AsyncGenerator[str, None]:
-    header = [
+    """Stream finalized results as CSV rows for a user.
+
+    Yields header row first, then rows in order of finalization (newest first).
+    Results paginated with yield_per=100 to limit memory on large datasets.
+
+    Args:
+        db: Async database session.
+        user_id: UUID to filter results by document owner.
+
+    Yields:
+        CSV-formatted strings (one per document), each newline-terminated.
+    """
         "document_id",
         "filename",
         "word_count",

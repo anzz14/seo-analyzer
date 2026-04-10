@@ -41,4 +41,7 @@ def test_compute_all_returns_expected_keys() -> None:
         "readability_score",
         "primary_keywords",
         "auto_summary",
+        "avg_sentence_length",
+        "sentence_count",
+        "reading_time_seconds",
     }

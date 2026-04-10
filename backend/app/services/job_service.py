@@ -25,6 +25,24 @@ async def reset_job_for_retry(
     job_id: str,
     user_id: str,
 ) -> ProcessingJob:
+    """Reset a failed job to queued state and dispatch retry task.
+
+    Validates: job exists, belongs to user, status is 'failed'. Resets state:
+    queued, 0% progress, clears error_message, increments retry_count,
+    clears celery_task_id and timestamps. Dispatches new Celery task.
+
+    Args:
+        db: Async database session.
+        job_id: UUID string of the job to retry (validated as UUID).
+        user_id: UUID string to verify job ownership via document.
+
+    Returns:
+        Updated ProcessingJob with new celery_task_id and reset state.
+
+    Raises:
+        HTTPException: 404 if job/document not found or invalid UUID;
+            400 if job status is not 'failed'.
+    """
     try:
         parsed_id = uuid.UUID(job_id)
     except ValueError as exc:

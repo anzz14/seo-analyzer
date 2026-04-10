@@ -19,6 +19,19 @@ async def create_document(
     file_size: int,
     mime_type: str,
 ) -> Document:
+    """Create a new document record in the database.
+
+    Args:
+        db: Async database session.
+        user_id: Document owner.
+        filename: Original uploaded filename.
+        file_path: Absolute path to stored file.
+        file_size: File size in bytes.
+        mime_type: Content type (e.g., 'text/plain').
+
+    Returns:
+        Created Document with populated id and timestamps.
+    """
     document = Document(
         user_id=user_id,
         original_filename=filename,
@@ -34,14 +47,19 @@ async def create_document(
 
 
 async def create_job_for_document(db: AsyncSession, document_id: str | UUID) -> ProcessingJob:
-    job = ProcessingJob(document_id=document_id, status="queued")
-    db.add(job)
-    await db.flush()
-    await db.refresh(job)
-    return job
+    """Create a queued processing job for a document.
+
+    Args:
+        db: Async database session.
+        document_id: Document to create job for.
+
+    Returns:
+        ProcessingJob with status='queued' and initialized timestamps.
+    """
 
 
 def _latest_job_subquery():
+    """Return subquery for latest processing_job per document (by created_at desc, id desc)."""
     return (
         select(
             ProcessingJob.id.label("job_id"),

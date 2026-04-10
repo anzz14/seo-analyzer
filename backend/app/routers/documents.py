@@ -30,8 +30,23 @@ async def upload_documents(
     files: list[UploadFile] = File(...),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> list[UploadResponse]:
-    upload_dir = Path(settings.UPLOAD_DIR) / str(current_user.id)
+) -> list[UploadResponse]:    \"\"\"Upload multiple .txt files, create documents/jobs, batch commit, then dispatch.
+
+    Validates file types (text/plain), sizes (≤5MB), writes to user directory,
+    creates Document + ProcessingJob records in a single transaction, queues
+    all tasks after commit. Batching reduces latency vs per-file commit+dispatch.
+
+    Args:
+        files: List of uploaded text files; validated by FastAPI UploadFile.
+        db: Async database session.
+        current_user: Authenticated user from JWT token.
+
+    Returns:
+        List of UploadResponse: document_id, job_id, filename, file_size.
+
+    Raises:
+        HTTPException: 422 if not text/plain; 413 if file >5MB.
+    \"\"\"    upload_dir = Path(settings.UPLOAD_DIR) / str(current_user.id)
     upload_dir.mkdir(parents=True, exist_ok=True)
 
     results: list[UploadResponse] = []
