@@ -88,7 +88,7 @@ export default function DashboardPage() {
 
       <Container maxWidth="lg" sx={{ py: 4 }}>
         <Stack spacing={3}>
-          <Stack direction="row" alignItems="center" justifyContent="space-between" gap={2}>
+          <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", gap: 2 }}>
             <Typography variant="h5">My Documents</Typography>
             <Button variant="contained" onClick={() => setIsUploadOpen(true)}>
               Upload Files
@@ -97,7 +97,7 @@ export default function DashboardPage() {
 
           <FilterBar />
 
-          <DocumentTable documents={documents} isLoading={isLoading} />
+          <DocumentTable documents={documents} isLoading={isLoading} onRetrySuccess={refetch} />
         </Stack>
       </Container>
 

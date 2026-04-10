@@ -1,10 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import DownloadIcon from "@mui/icons-material/Download";
+import ReplayIcon from "@mui/icons-material/Replay";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import {
   Box,
+  CircularProgress,
   IconButton,
   Pagination,
   Paper,
@@ -22,6 +25,7 @@ import { useDocumentStore } from "@/store/documentStore";
 import type { DocumentResponse } from "@/types/document";
 import { useSSE } from "@/hooks/useSSE";
 import { downloadDocumentExport } from "@/components/features/export/ExportButtons";
+import api from "@/lib/api";
 
 import JobProgressBar from "./JobProgressBar";
 import StatusBadge from "./StatusBadge";
@@ -31,6 +35,7 @@ type Status = "queued" | "processing" | "completed" | "failed" | "finalized";
 interface DocumentTableProps {
   documents: DocumentResponse[];
   isLoading: boolean;
+  onRetrySuccess?: () => Promise<void> | void;
 }
 
 interface ProcessingProgressCellProps {
@@ -84,14 +89,27 @@ function normalizeStatus(status: string | undefined): Status {
   return "queued";
 }
 
-export default function DocumentTable({ documents, isLoading }: DocumentTableProps) {
+export default function DocumentTable({ documents, isLoading, onRetrySuccess }: DocumentTableProps) {
   const page = useDocumentStore((state) => state.page);
   const total = useDocumentStore((state) => state.total);
   const pageSize = useDocumentStore((state) => state.pageSize);
   const setPage = useDocumentStore((state) => state.setPage);
+  const [retryingJobId, setRetryingJobId] = useState<string | null>(null);
 
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
   const showSkeletons = isLoading && documents.length === 0;
+
+  const handleRetry = async (jobId: string) => {
+    setRetryingJobId(jobId);
+    try {
+      await api.post(`/jobs/${jobId}/retry`);
+      if (onRetrySuccess) {
+        await onRetrySuccess();
+      }
+    } finally {
+      setRetryingJobId(null);
+    }
+  };
 
   return (
     <Box>
@@ -162,6 +180,22 @@ export default function DocumentTable({ documents, isLoading }: DocumentTablePro
                           }}
                         >
                           <DownloadIcon fontSize="small" />
+                        </IconButton>
+                      ) : null}
+                      {status === "failed" && jobId ? (
+                        <IconButton
+                          aria-label={`Retry ${document.original_filename}`}
+                          size="small"
+                          disabled={retryingJobId === jobId}
+                          onClick={() => {
+                            void handleRetry(jobId);
+                          }}
+                        >
+                          {retryingJobId === jobId ? (
+                            <CircularProgress size={16} />
+                          ) : (
+                            <ReplayIcon fontSize="small" />
+                          )}
                         </IconButton>
                       ) : null}
                       <IconButton
