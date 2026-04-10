@@ -4,14 +4,16 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import get_db
 from app.dependencies.auth import get_current_user
+from app.models.extracted_result import ExtractedResult
 from app.models.processing_job import ProcessingJob
 from app.models.user import User
-from app.schemas.document import DocumentListResponse, DocumentResponse
+from app.schemas.document import DocumentListResponse, DocumentResponse, ExtractedResultResponse
 from app.schemas.job import JobResponse
 from app.schemas.job import UploadResponse
 from app.services import document_service
@@ -83,7 +85,7 @@ async def upload_documents(
     return results
 
 
-def _to_document_response(document, latest_job: ProcessingJob | None) -> DocumentResponse:
+def _to_document_response(document, latest_job: ProcessingJob | None, extracted_result=None) -> DocumentResponse:
     latest_job_response: JobResponse | None = None
     if latest_job is not None:
         latest_job_response = JobResponse(
@@ -100,6 +102,21 @@ def _to_document_response(document, latest_job: ProcessingJob | None) -> Documen
             created_at=latest_job.created_at,
         )
 
+    result_response = None
+    if extracted_result is not None:
+        result_response = ExtractedResultResponse(
+            id=str(extracted_result.id),
+            document_id=str(extracted_result.document_id),
+            word_count=extracted_result.word_count,
+            readability_score=extracted_result.readability_score,
+            primary_keywords=extracted_result.primary_keywords,
+            auto_summary=extracted_result.auto_summary,
+            user_edited_summary=extracted_result.user_edited_summary,
+            is_finalized=extracted_result.is_finalized,
+            finalized_at=extracted_result.finalized_at,
+            created_at=extracted_result.created_at,
+        )
+
     return DocumentResponse(
         id=str(document.id),
         user_id=str(document.user_id),
@@ -109,6 +126,7 @@ def _to_document_response(document, latest_job: ProcessingJob | None) -> Documen
         upload_timestamp=document.upload_timestamp,
         created_at=document.created_at,
         latest_job=latest_job_response,
+        result=result_response,
     )
 
 
@@ -134,10 +152,18 @@ async def list_documents(
         sort_order,
     )
 
+    # Get extracted results for these documents
+    doc_ids = [doc.id for doc in docs]
+    extracted_results_result = await db.execute(
+        select(ExtractedResult).where(ExtractedResult.document_id.in_(doc_ids))
+    )
+    extracted_results_map = {er.document_id: er for er in extracted_results_result.scalars().all()}
+
     items: list[DocumentResponse] = []
     for doc in docs:
         latest_job = getattr(doc, "latest_job", None)
-        items.append(_to_document_response(doc, latest_job))
+        extracted_result = extracted_results_map.get(doc.id)
+        items.append(_to_document_response(doc, latest_job, extracted_result))
 
     return DocumentListResponse(items=items, total=total, page=page, page_size=page_size)
 
@@ -150,4 +176,11 @@ async def get_document(
 ) -> DocumentResponse:
     document = await document_service.get_document_with_details(db, document_id, current_user.id)
     latest_job = getattr(document, "latest_job", None)
-    return _to_document_response(document, latest_job)
+    
+    # Fetch extracted result separately
+    extracted_result_result = await db.execute(
+        select(ExtractedResult).where(ExtractedResult.document_id == document_id)
+    )
+    extracted_result = extracted_result_result.scalar_one_or_none()
+    
+    return _to_document_response(document, latest_job, extracted_result)

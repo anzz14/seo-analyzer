@@ -3,7 +3,21 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict
 
 from app.schemas.job import JobResponse
-from app.schemas.result import ExtractedResultResponse
+
+
+class ExtractedResultResponse(BaseModel):
+    id: str
+    document_id: str
+    word_count: int | None = None
+    readability_score: float | None = None
+    primary_keywords: list[dict] | None = None
+    auto_summary: str | None = None
+    user_edited_summary: str | None = None
+    is_finalized: bool = False
+    finalized_at: datetime | None = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class DocumentResponse(BaseModel):
@@ -15,6 +29,7 @@ class DocumentResponse(BaseModel):
     upload_timestamp: datetime
     created_at: datetime
     latest_job: JobResponse | None = None
+    result: ExtractedResultResponse | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -24,8 +39,3 @@ class DocumentListResponse(BaseModel):
     total: int
     page: int
     page_size: int
-
-
-class DocumentDetailResponse(DocumentResponse):
-    latest_job: JobResponse | None = None
-    result: ExtractedResultResponse | None = None
