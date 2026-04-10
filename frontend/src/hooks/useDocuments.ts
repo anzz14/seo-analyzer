@@ -11,7 +11,12 @@ interface DocumentsListResponse {
   page_size: number;
 }
 
-export function useDocuments() {
+interface UseDocumentsOptions {
+  enablePolling?: boolean;
+}
+
+export function useDocuments(options: UseDocumentsOptions = {}) {
+  const enablePolling = options.enablePolling ?? true;
   const filters = useDocumentStore((state) => state.filters);
   const page = useDocumentStore((state) => state.page);
   const pageSize = useDocumentStore((state) => state.pageSize);
@@ -54,6 +59,10 @@ export function useDocuments() {
   }, [refetch]);
 
   useEffect(() => {
+    if (!enablePolling) {
+      return;
+    }
+
     void refetchRef.current();
 
     const intervalId = setInterval(() => {
@@ -63,7 +72,7 @@ export function useDocuments() {
     return () => {
       clearInterval(intervalId);
     };
-  }, [filters, page]);
+  }, [enablePolling, filters, page]);
 
   return { refetch };
 }

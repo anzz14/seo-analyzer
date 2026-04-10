@@ -165,6 +165,14 @@ async def get_document(db: AsyncSession, document_id: str | UUID, user_id: str |
     return document
 
 
+async def get_document_no_auth_check(
+    db: AsyncSession,
+    document_id: str | UUID,
+) -> Document | None:
+    result = await db.execute(select(Document).where(Document.id == document_id))
+    return result.scalar_one_or_none()
+
+
 async def get_document_with_details(
     db: AsyncSession, doc_id: str | UUID, user_id: str | UUID
 ) -> Document:

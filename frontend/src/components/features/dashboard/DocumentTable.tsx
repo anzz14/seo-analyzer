@@ -19,7 +19,9 @@ import {
 
 import { useDocumentStore } from "@/store/documentStore";
 import type { DocumentResponse } from "@/types/document";
+import { useSSE } from "@/hooks/useSSE";
 
+import JobProgressBar from "./JobProgressBar";
 import StatusBadge from "./StatusBadge";
 
 type Status = "queued" | "processing" | "completed" | "failed" | "finalized";
@@ -27,6 +29,21 @@ type Status = "queued" | "processing" | "completed" | "failed" | "finalized";
 interface DocumentTableProps {
   documents: DocumentResponse[];
   isLoading: boolean;
+}
+
+interface ProcessingProgressCellProps {
+  jobId: string | null;
+  status: Status;
+}
+
+function ProcessingProgressCell({ jobId, status }: ProcessingProgressCellProps) {
+  useSSE(status === "processing" ? jobId : null);
+
+  if (status !== "processing" || !jobId) {
+    return null;
+  }
+
+  return <JobProgressBar jobId={jobId} />;
 }
 
 function formatTimestamp(value: string): string {
@@ -84,6 +101,7 @@ export default function DocumentTable({ documents, isLoading }: DocumentTablePro
               <TableCell>Uploaded</TableCell>
               <TableCell>Size</TableCell>
               <TableCell>Status</TableCell>
+              <TableCell>Progress</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
@@ -103,18 +121,34 @@ export default function DocumentTable({ documents, isLoading }: DocumentTablePro
                     <TableCell>
                       <Skeleton variant="rounded" width={90} height={24} />
                     </TableCell>
+                    <TableCell>
+                      <Skeleton variant="text" width="75%" />
+                    </TableCell>
                     <TableCell align="right">
                       <Skeleton variant="circular" width={28} height={28} sx={{ ml: "auto" }} />
                     </TableCell>
                   </TableRow>
                 ))
-              : documents.map((document) => (
+              : documents.map((document) => {
+                  const status = normalizeStatus(document.latest_job?.status ?? "queued");
+                  const jobId = document.latest_job?.id ?? null;
+
+                  return (
                   <TableRow key={document.id} hover>
                     <TableCell>{document.original_filename}</TableCell>
                     <TableCell>{formatTimestamp(document.upload_timestamp)}</TableCell>
                     <TableCell>{formatFileSize(document.file_size)}</TableCell>
                     <TableCell>
-                      <StatusBadge status={normalizeStatus(document.latest_job?.status ?? "queued")} />
+                      <StatusBadge status={status} />
+                    </TableCell>
+                    <TableCell>
+                      {status === "processing" ? (
+                        <ProcessingProgressCell jobId={jobId} status={status} />
+                      ) : (
+                        <Typography variant="caption" color="text.secondary">
+                          -
+                        </Typography>
+                      )}
                     </TableCell>
                     <TableCell align="right">
                       <IconButton
@@ -127,7 +161,7 @@ export default function DocumentTable({ documents, isLoading }: DocumentTablePro
                       </IconButton>
                     </TableCell>
                   </TableRow>
-                ))}
+                );})}
           </TableBody>
         </Table>
       </TableContainer>
