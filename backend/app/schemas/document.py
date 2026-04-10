@@ -3,6 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict
 
 from app.schemas.job import JobResponse
+from app.schemas.result import ExtractedResultResponse
 
 
 class DocumentResponse(BaseModel):
@@ -23,3 +24,8 @@ class DocumentListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class DocumentDetailResponse(DocumentResponse):
+    latest_job: JobResponse | None = None
+    result: ExtractedResultResponse | None = None
