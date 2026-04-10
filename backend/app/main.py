@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.routers.auth import router as auth_router
 from app.routers import documents as documents_router
+from app.routers import export as export_router
 from app.routers import jobs as jobs_router
 from app.routers import results as results_router
 
@@ -41,6 +42,7 @@ app.add_middleware(
 
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(documents_router.router, prefix="/api/v1")
+app.include_router(export_router.router, prefix="/api/v1")
 app.include_router(jobs_router.router, prefix="/api/v1")
 app.include_router(results_router.router, prefix="/api/v1")
 

@@ -22,6 +22,7 @@ import FinalizeButton from "@/components/features/detail/FinalizeButton";
 import KeywordsTable from "@/components/features/detail/KeywordsTable";
 import MetricsPanel from "@/components/features/detail/MetricsPanel";
 import SummaryEditor from "@/components/features/detail/SummaryEditor";
+import ExportButtons from "@/components/features/export/ExportButtons";
 import { useAuth } from "@/context/AuthContext";
 import { useDocumentDetail } from "@/hooks/useDocumentDetail";
 import api from "@/lib/api";
@@ -135,6 +136,7 @@ export default function DocumentDetailPage() {
                   />
                   <SummaryEditor result={result} documentId={documentId} onSaved={() => void refetch()} />
                   <FinalizeButton result={result} documentId={documentId} onFinalized={() => void refetch()} />
+                  {result.is_finalized ? <ExportButtons documentId={documentId} isFinalized /> : null}
                 </Stack>
               </Grid>
               <Grid item xs={12} md={4}>

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import DownloadIcon from "@mui/icons-material/Download";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import {
   Box,
@@ -20,6 +21,7 @@ import {
 import { useDocumentStore } from "@/store/documentStore";
 import type { DocumentResponse } from "@/types/document";
 import { useSSE } from "@/hooks/useSSE";
+import { downloadDocumentExport } from "@/components/features/export/ExportButtons";
 
 import JobProgressBar from "./JobProgressBar";
 import StatusBadge from "./StatusBadge";
@@ -151,6 +153,17 @@ export default function DocumentTable({ documents, isLoading }: DocumentTablePro
                       )}
                     </TableCell>
                     <TableCell align="right">
+                      {status === "finalized" ? (
+                        <IconButton
+                          aria-label={`Export ${document.original_filename}`}
+                          size="small"
+                          onClick={() => {
+                            void downloadDocumentExport(document.id, "csv");
+                          }}
+                        >
+                          <DownloadIcon fontSize="small" />
+                        </IconButton>
+                      ) : null}
                       <IconButton
                         aria-label={`View ${document.original_filename}`}
                         component={Link}
