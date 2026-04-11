@@ -171,7 +171,7 @@ seo-analyzer/
 - Docker Desktop (or Docker Engine + Compose)
 - Node.js 18+ (for local frontend development outside Docker)
 
-## Environment Setup
+## Setup Instructions
 
 1. Copy environment file:
 
@@ -198,7 +198,7 @@ NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
 FRONTEND_ORIGIN=http://localhost:3000
 ```
 
-## Quick Start
+## Run Steps
 
 1. Build and start services:
 
@@ -229,6 +229,71 @@ npm run dev
 ```
 
 Open `http://localhost:3000`.
+
+## Architecture Overview
+
+This system uses an async pipeline so uploads return quickly while analysis runs in the background.
+
+- Frontend (Next.js): auth, upload UI, dashboard, detail view, SSE subscription
+- API (FastAPI): authentication, document/job/result APIs, export endpoints
+- Worker (Celery): background text analysis and retry handling
+- PostgreSQL: source of truth for users, documents, jobs, and extracted results
+- Redis: Celery broker/result backend and SSE progress pub/sub transport
+- Shared storage: uploaded `.txt` files consumed by API and worker containers
+
+High-level flow:
+
+1. User uploads file(s) from frontend.
+2. API validates, stores files, creates document/job rows, commits.
+3. API dispatches Celery task(s) to Redis broker.
+4. Worker processes files and publishes progress updates.
+5. SSE endpoint streams job progress to frontend.
+6. User reviews, edits, finalizes, and exports results.
+
+## System Design
+
+The project is designed as a decoupled web + worker architecture with clear responsibilities.
+
+- Command side (API + worker): handles uploads, job creation, analysis execution, retries, and result persistence
+- Query side (API + frontend): serves document lists/details, progress state, and exports for finalized results
+- Data consistency model: PostgreSQL is the system of record; Redis is used for transient queueing/progress signals
+- Failure handling: job status machine (`queued -> processing -> completed/failed -> finalized`) and retry endpoint guardrails prevent invalid transitions
+- Idempotency strategy: extracted result writes use upsert semantics so retries do not duplicate rows
+
+This structure keeps user-facing latency low while preserving reliability under transient worker failures.
+
+## Async Workflow Execution
+
+Async execution is implemented as a transactional handoff between API and worker.
+
+1. API validates files and creates `documents` + `processing_jobs` records.
+2. API commits DB transaction before dispatching Celery tasks.
+3. Worker consumes tasks from Redis and updates progress stage/percentage.
+4. Progress is persisted and published via Redis pub/sub.
+5. SSE endpoint forwards updates to frontend subscribers in near real time.
+6. Worker upserts extracted results and marks job terminal state.
+
+Key reliability behaviors:
+
+- Retry-safe result persistence (upsert by document)
+- Preserves user-edited summary on re-analysis
+- Explicit failed-state retry endpoint restricted to failed jobs
+- Graceful handling for missing files and max-retry exhaustion
+
+## Implementation Quality
+
+Implementation quality is enforced through layered architecture and automated tests.
+
+- Separation of concerns: routers (transport), services (business logic), workers (async execution), schemas (contracts)
+- Type safety: TypeScript frontend + Pydantic/FastAPI backend response modeling
+- Test coverage: unit, API, and integration tests, including retry/idempotency behavior
+- Operational clarity: health checks, seed script, and reproducible Docker setup
+- Developer ergonomics: explicit env templates, scriptable migration flow, and documented troubleshooting
+
+Current quality baseline:
+
+- Frontend production build passes (`npm run build`)
+- Backend test suite passes (`pytest tests/ -v --tb=short`)
 
 ## Seed Data (Test Login + 3 Documents)
 
@@ -332,6 +397,31 @@ docker compose logs -f api
 docker compose logs -f worker
 docker compose logs -f redis
 ```
+
+## Assumptions
+
+- Input files are UTF-8 plain text (`text/plain`, `.txt`).
+- Redis and PostgreSQL are reachable from API and worker at startup.
+- Upload directory is shared between API and worker (`storage/uploads`).
+- JWT auth is sufficient for this project scope (no OAuth/SSO requirement).
+- Single-region deployment is acceptable for latency and consistency.
+
+## Tradeoffs
+
+- Celery + Redis chosen over simpler in-process jobs for reliability and retries, at cost of extra operational complexity.
+- SSE chosen for one-way real-time progress (simpler than WebSockets), but only supports server-to-client updates.
+- Local/shared file storage simplifies development, but is less portable than object storage for large-scale cloud setups.
+- Readability/keyword heuristics favor speed and determinism over NLP model sophistication.
+- Docker Compose provides fast local orchestration, but is not a full production orchestrator.
+
+## Limitations
+
+- Only `.txt` uploads are supported currently (no PDF/DOCX parsing).
+- Very large files are blocked by configured upload size limits.
+- No tenant-level rate limiting or advanced abuse protection yet.
+- Background worker scaling is manual in Compose-based deployments.
+- Export and analytics are tied to finalized results only.
+- Current auth/session approach uses JWT in browser storage and requires careful production hardening.
 
 ## Troubleshooting
 
