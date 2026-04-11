@@ -28,7 +28,7 @@ export default function MetricsPanel({ wordCount, readabilityScore }: MetricsPan
 
   return (
     <Grid container spacing={2}>
-      <Grid item xs={12} md={6}>
+      <Grid size={{ xs: 12, md: 6 }}>
         <Card>
           <CardContent>
             <Typography variant="subtitle2" color="text.secondary" gutterBottom>
@@ -41,7 +41,7 @@ export default function MetricsPanel({ wordCount, readabilityScore }: MetricsPan
         </Card>
       </Grid>
 
-      <Grid item xs={12} md={6}>
+      <Grid size={{ xs: 12, md: 6 }}>
         <Card>
           <CardContent>
             <Typography variant="subtitle2" color="text.secondary" gutterBottom>

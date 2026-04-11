@@ -128,7 +128,7 @@ export default function DocumentDetailPage() {
 
           {result ? (
             <Grid container spacing={3}>
-              <Grid item xs={12} md={8}>
+              <Grid size={{ xs: 12, md: 8 }}>
                 <Stack spacing={3}>
                   <MetricsPanel
                     wordCount={result.word_count ?? 0}
@@ -139,7 +139,7 @@ export default function DocumentDetailPage() {
                   {result.is_finalized ? <ExportButtons documentId={documentId} isFinalized /> : null}
                 </Stack>
               </Grid>
-              <Grid item xs={12} md={4}>
+              <Grid size={{ xs: 12, md: 4 }}>
                 <KeywordsTable keywords={result.primary_keywords ?? []} />
               </Grid>
             </Grid>

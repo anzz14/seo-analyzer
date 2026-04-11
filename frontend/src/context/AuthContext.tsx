@@ -2,6 +2,7 @@
 
 import {
 	createContext,
+	useCallback,
 	useContext,
 	useEffect,
 	useMemo,
@@ -69,26 +70,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 		setIsLoading(false);
 	}, []);
 
-	const login = async (email: string, password: string): Promise<void> => {
+	const login = useCallback(async (email: string, password: string): Promise<void> => {
 		const { data } = await api.post<TokenResponse>("/auth/login", { email, password });
 
 		setAuthToken(data.access_token);
 		localStorage.setItem("seo_jwt", data.access_token);
 		setUser({ user_id: data.user_id, email: data.email });
 		router.push("/dashboard");
-	};
+	}, [router]);
 
-	const logout = (): void => {
+	const logout = useCallback((): void => {
 		setAuthToken(null);
 		localStorage.removeItem("seo_jwt");
 		setUser(null);
 		router.push("/login");
-	};
+	}, [router]);
 
-	const register = async (email: string, password: string): Promise<void> => {
+	const register = useCallback(async (email: string, password: string): Promise<void> => {
 		await api.post<TokenResponse>("/auth/register", { email, password });
 		await login(email, password);
-	};
+	}, [login]);
 
 	const value = useMemo<AuthContextType>(
 		() => ({
@@ -98,7 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 			logout,
 			register,
 		}),
-		[user, isLoading],
+		[user, isLoading, login, logout, register],
 	);
 
 	return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
