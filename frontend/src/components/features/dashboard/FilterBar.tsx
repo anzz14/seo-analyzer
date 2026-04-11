@@ -60,18 +60,20 @@ export default function FilterBar() {
   );
 
   return (
-    <Stack direction="row" gap={2} flexWrap="wrap">
+    <Stack direction="row" spacing={2} sx={{ flexWrap: "wrap" }}>
       <TextField
         value={searchInput}
         onChange={(event) => setSearchInput(event.target.value)}
         placeholder="Search documents"
         size="small"
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              <SearchIcon fontSize="small" />
-            </InputAdornment>
-          ),
+        slotProps={{
+          input: {
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon fontSize="small" />
+              </InputAdornment>
+            ),
+          },
         }}
       />
 

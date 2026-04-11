@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useRef, useState } from "react";
 import { Alert, Box, LinearProgress, Stack, Typography } from "@mui/material";
 
 import api from "@/lib/api";
@@ -13,10 +13,11 @@ interface UploadZoneProps {
 const MAX_UPLOAD_SIZE_BYTES = 5_242_880;
 
 export default function UploadZone({ onUploadComplete }: UploadZoneProps) {
-  const inputId = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [isDragOver, setIsDragOver] = useState<boolean>(false);
 
   const validateFiles = (files: File[]): File[] => {
     const errors: string[] = [];
@@ -91,6 +92,7 @@ export default function UploadZone({ onUploadComplete }: UploadZoneProps) {
 
   const handleDrop = async (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
+    setIsDragOver(false);
     const files = Array.from(event.dataTransfer.files);
     await uploadFiles(files);
   };
@@ -98,36 +100,42 @@ export default function UploadZone({ onUploadComplete }: UploadZoneProps) {
   return (
     <Stack spacing={2}>
       <Box
-        component="label"
-        htmlFor={inputId}
         sx={{
           border: "2px dashed",
-          borderColor: "primary.main",
+          borderColor: isDragOver ? "success.main" : "primary.main",
+          backgroundColor: isDragOver ? "action.hover" : "transparent",
           borderRadius: 2,
           p: 4,
           textAlign: "center",
           cursor: "pointer",
           display: "block",
+          transition: "all 0.2s ease-in-out",
         }}
-        onDragOver={(event) => event.preventDefault()}
+        onClick={() => inputRef.current?.click()}
+        onDragOver={(event) => {
+          event.preventDefault();
+          setIsDragOver(true);
+        }}
+        onDragLeave={() => setIsDragOver(false)}
         onDrop={handleDrop}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            inputRef.current?.click();
+          }
+        }}
       >
         <Typography>Drag & drop .txt files here, or click to browse</Typography>
 
         <input
-          id={inputId}
+          ref={inputRef}
           type="file"
           multiple
           accept=".txt"
           style={{
-            position: "absolute",
-            width: 1,
-            height: 1,
-            padding: 0,
-            margin: -1,
-            overflow: "hidden",
-            clip: "rect(0, 0, 0, 0)",
-            border: 0,
+            display: "none",
           }}
           onChange={handleInputChange}
         />

@@ -40,7 +40,7 @@ interface ExportButtonsProps {
 
 export default function ExportButtons({ documentId, isFinalized }: ExportButtonsProps) {
   return (
-    <Stack direction="row" gap={1}>
+    <Stack direction="row" spacing={1}>
       <Button
         variant="outlined"
         startIcon={<DownloadIcon />}

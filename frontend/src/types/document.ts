@@ -19,7 +19,7 @@ export interface DocumentResponse {
 	mime_type: string;
 	upload_timestamp: string;
 	created_at: string;
-	latest_job?: JobResponse;
+	latest_job?: JobResponse | null;
 }
 
 export interface KeywordMetric {
