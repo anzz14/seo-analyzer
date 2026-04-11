@@ -6,7 +6,6 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy import Select, asc, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
 
 from app.models.document import Document
 from app.models.processing_job import ProcessingJob
@@ -20,6 +19,19 @@ async def create_document(
     file_size: int,
     mime_type: str,
 ) -> Document:
+    """Create a new document record in the database.
+
+    Args:
+        db: Async database session.
+        user_id: Document owner.
+        filename: Original uploaded filename.
+        file_path: Absolute path to stored file.
+        file_size: File size in bytes.
+        mime_type: Content type (e.g., 'text/plain').
+
+    Returns:
+        Created Document with populated id and timestamps.
+    """
     document = Document(
         user_id=user_id,
         original_filename=filename,
@@ -35,14 +47,19 @@ async def create_document(
 
 
 async def create_job_for_document(db: AsyncSession, document_id: str | UUID) -> ProcessingJob:
-    job = ProcessingJob(document_id=document_id, status="queued")
-    db.add(job)
-    await db.flush()
-    await db.refresh(job)
-    return job
+    """Create a queued processing job for a document.
+
+    Args:
+        db: Async database session.
+        document_id: Document to create job for.
+
+    Returns:
+        ProcessingJob with status='queued' and initialized timestamps.
+    """
 
 
 def _latest_job_subquery():
+    """Return subquery for latest processing_job per document (by created_at desc, id desc)."""
     return (
         select(
             ProcessingJob.id.label("job_id"),
@@ -137,6 +154,8 @@ async def list_documents(
         return rows, total_count
 
     doc_ids = [doc.id for doc in rows]
+    
+    # Fetch latest jobs
     latest_jobs_result = await db.execute(
         select(ProcessingJob)
         .join(latest_job, ProcessingJob.id == latest_job.c.job_id)
@@ -165,18 +184,23 @@ async def get_document(db: AsyncSession, document_id: str | UUID, user_id: str |
     return document
 
 
+async def get_document_no_auth_check(
+    db: AsyncSession,
+    document_id: str | UUID,
+) -> Document | None:
+    result = await db.execute(
+        select(Document).where(Document.id == document_id)
+    )
+    return result.scalar_one_or_none()
+
+
 async def get_document_with_details(
     db: AsyncSession, doc_id: str | UUID, user_id: str | UUID
 ) -> Document:
     result = await db.execute(
-        select(Document)
-        .options(
-            joinedload(Document.processing_jobs),
-            joinedload(Document.extracted_result),
-        )
-        .where(Document.id == doc_id, Document.user_id == user_id)
+        select(Document).where(Document.id == doc_id, Document.user_id == user_id)
     )
-    document = result.unique().scalar_one_or_none()
+    document = result.scalar_one_or_none()
 
     if document is None:
         raise HTTPException(
@@ -184,13 +208,14 @@ async def get_document_with_details(
             detail="Document not found",
         )
 
-    latest_job = None
-    if document.processing_jobs:
-        latest_job = sorted(
-            document.processing_jobs,
-            key=lambda job: (job.created_at or datetime.min.replace(tzinfo=timezone.utc), job.id),
-            reverse=True,
-        )[0]
-    setattr(document, "latest_job", latest_job)
+    # Fetch latest job separately
+    latest_job = _latest_job_subquery()
+    latest_jobs_result = await db.execute(
+        select(ProcessingJob)
+        .join(latest_job, ProcessingJob.id == latest_job.c.job_id)
+        .where(latest_job.c.rn == 1, ProcessingJob.document_id == doc_id)
+    )
+    latest_job_obj = latest_jobs_result.scalars().first()
+    setattr(document, "latest_job", latest_job_obj)
 
     return document

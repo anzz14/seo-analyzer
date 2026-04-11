@@ -22,6 +22,31 @@ export interface DocumentResponse {
 	latest_job?: JobResponse;
 }
 
+export interface KeywordMetric {
+	keyword: string;
+	count: number;
+	density: number;
+}
+
+export interface ExtractedResultResponse {
+	id: string;
+	document_id: string;
+	job_id: string;
+	word_count: number | null;
+	readability_score: number | null;
+	primary_keywords: KeywordMetric[] | null;
+	auto_summary: string | null;
+	user_edited_summary: string | null;
+	is_finalized: boolean;
+	finalized_at: string | null;
+	created_at: string;
+}
+
+export interface DocumentDetailResponse extends DocumentResponse {
+	latest_job: JobResponse | null;
+	result: ExtractedResultResponse | null;
+}
+
 export interface UploadResponse {
 	document_id: string;
 	job_id: string;

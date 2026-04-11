@@ -1,7 +1,8 @@
 from collections.abc import AsyncGenerator
 
+from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from app.config import settings
 
@@ -11,6 +12,10 @@ async_engine = create_async_engine(
 	pool_size=5,
 	max_overflow=10,
 )
+
+SYNC_DATABASE_URL = settings.DATABASE_URL.replace("+asyncpg", "+psycopg2")
+sync_engine = create_engine(SYNC_DATABASE_URL)
+SyncSession = sessionmaker(sync_engine)
 
 
 class Base(DeclarativeBase):

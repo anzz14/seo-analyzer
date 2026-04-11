@@ -4,14 +4,16 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import get_db
 from app.dependencies.auth import get_current_user
+from app.models.extracted_result import ExtractedResult
 from app.models.processing_job import ProcessingJob
 from app.models.user import User
-from app.schemas.document import DocumentListResponse, DocumentResponse
+from app.schemas.document import DocumentListResponse, DocumentResponse, ExtractedResultResponse
 from app.schemas.job import JobResponse
 from app.schemas.job import UploadResponse
 from app.services import document_service
@@ -28,11 +30,27 @@ async def upload_documents(
     files: list[UploadFile] = File(...),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> list[UploadResponse]:
-    upload_dir = Path(settings.UPLOAD_DIR) / str(current_user.id)
+) -> list[UploadResponse]:    \"\"\"Upload multiple .txt files, create documents/jobs, batch commit, then dispatch.
+
+    Validates file types (text/plain), sizes (≤5MB), writes to user directory,
+    creates Document + ProcessingJob records in a single transaction, queues
+    all tasks after commit. Batching reduces latency vs per-file commit+dispatch.
+
+    Args:
+        files: List of uploaded text files; validated by FastAPI UploadFile.
+        db: Async database session.
+        current_user: Authenticated user from JWT token.
+
+    Returns:
+        List of UploadResponse: document_id, job_id, filename, file_size.
+
+    Raises:
+        HTTPException: 422 if not text/plain; 413 if file >5MB.
+    \"\"\"    upload_dir = Path(settings.UPLOAD_DIR) / str(current_user.id)
     upload_dir.mkdir(parents=True, exist_ok=True)
 
     results: list[UploadResponse] = []
+    dispatch_payloads: list[tuple[str, str, str]] = []
 
     for file in files:
         if file.content_type != "text/plain":
@@ -65,11 +83,7 @@ async def upload_documents(
             mime_type=file.content_type,
         )
         job = await document_service.create_job_for_document(db=db, document_id=document.id)
-
-        # Lazy import avoids circular imports between routers/services and worker tasks.
-        from app.workers.tasks import analyze_document
-
-        analyze_document.delay(str(job.id), str(document.id), str(stored_path))
+        dispatch_payloads.append((str(job.id), str(document.id), str(stored_path)))
 
         results.append(
             UploadResponse(
@@ -80,10 +94,19 @@ async def upload_documents(
             )
         )
 
+    # Single commit for bulk upload keeps request latency lower than committing each file.
+    await db.commit()
+
+    # Lazy import avoids circular imports between routers/services and worker tasks.
+    from app.workers.tasks import analyze_document
+
+    for job_id, document_id, file_path in dispatch_payloads:
+        analyze_document.delay(job_id, document_id, file_path)
+
     return results
 
 
-def _to_document_response(document, latest_job: ProcessingJob | None) -> DocumentResponse:
+def _to_document_response(document, latest_job: ProcessingJob | None, extracted_result=None) -> DocumentResponse:
     latest_job_response: JobResponse | None = None
     if latest_job is not None:
         latest_job_response = JobResponse(
@@ -100,6 +123,21 @@ def _to_document_response(document, latest_job: ProcessingJob | None) -> Documen
             created_at=latest_job.created_at,
         )
 
+    result_response = None
+    if extracted_result is not None:
+        result_response = ExtractedResultResponse(
+            id=str(extracted_result.id),
+            document_id=str(extracted_result.document_id),
+            word_count=extracted_result.word_count,
+            readability_score=extracted_result.readability_score,
+            primary_keywords=extracted_result.primary_keywords,
+            auto_summary=extracted_result.auto_summary,
+            user_edited_summary=extracted_result.user_edited_summary,
+            is_finalized=extracted_result.is_finalized,
+            finalized_at=extracted_result.finalized_at,
+            created_at=extracted_result.created_at,
+        )
+
     return DocumentResponse(
         id=str(document.id),
         user_id=str(document.user_id),
@@ -109,6 +147,7 @@ def _to_document_response(document, latest_job: ProcessingJob | None) -> Documen
         upload_timestamp=document.upload_timestamp,
         created_at=document.created_at,
         latest_job=latest_job_response,
+        result=result_response,
     )
 
 
@@ -134,10 +173,18 @@ async def list_documents(
         sort_order,
     )
 
+    # Get extracted results for these documents
+    doc_ids = [doc.id for doc in docs]
+    extracted_results_result = await db.execute(
+        select(ExtractedResult).where(ExtractedResult.document_id.in_(doc_ids))
+    )
+    extracted_results_map = {er.document_id: er for er in extracted_results_result.scalars().all()}
+
     items: list[DocumentResponse] = []
     for doc in docs:
         latest_job = getattr(doc, "latest_job", None)
-        items.append(_to_document_response(doc, latest_job))
+        extracted_result = extracted_results_map.get(doc.id)
+        items.append(_to_document_response(doc, latest_job, extracted_result))
 
     return DocumentListResponse(items=items, total=total, page=page, page_size=page_size)
 
@@ -150,4 +197,11 @@ async def get_document(
 ) -> DocumentResponse:
     document = await document_service.get_document_with_details(db, document_id, current_user.id)
     latest_job = getattr(document, "latest_job", None)
-    return _to_document_response(document, latest_job)
+    
+    # Fetch extracted result separately
+    extracted_result_result = await db.execute(
+        select(ExtractedResult).where(ExtractedResult.document_id == document_id)
+    )
+    extracted_result = extracted_result_result.scalar_one_or_none()
+    
+    return _to_document_response(document, latest_job, extracted_result)
